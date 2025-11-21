@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video to PowerPoint Converter</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Video to PowerPoint Converter</h1>
+            <p>Convert your videos to PowerPoint presentations with automatic scene detection</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Navigation Bar -->
+            <div class="navigation-bar" id="navigation-bar" style="display: none;">
+                <button id="back-btn" class="btn btn-secondary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 5px;">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    Back
+                </button>
+                <button id="home-btn" class="btn btn-secondary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 5px;">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                    Home
+                </button>
+            </div>
+
+            <!-- Step 1: Upload -->
+            <section id="upload-section" class="section active">
+                <h2>Step 1: Upload Video</h2>
+                <div class="upload-area" id="upload-area">
+                    <div class="upload-content">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <p>Drag and drop your video file here</p>
+                        <p class="upload-hint">or click to browse</p>
+                        <input type="file" id="video-input" accept="video/*" hidden>
+                    </div>
+                </div>
+                <div class="upload-settings">
+                    <div class="setting-group">
+                        <label for="threshold">
+                            Change Detection Sensitivity:
+                            <button class="help-btn" data-help="threshold" aria-label="Show help">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3m0 3h.01"></path>
+                                </svg>
+                            </button>
+                        </label>
+                        <input type="range" id="threshold" min="0.1" max="0.8" step="0.05" value="0.3">
+                        <span id="threshold-value">0.3</span>
+                    </div>
+                    <div class="setting-group">
+                        <label for="min-interval">
+                            Minimum Frame Interval:
+                            <button class="help-btn" data-help="min-interval" aria-label="Show help">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3m0 3h.01"></path>
+                                </svg>
+                            </button>
+                        </label>
+                        <input type="number" id="min-interval" min="10" max="120" value="30">
+                    </div>
+                </div>
+                <div id="upload-status" class="status-message"></div>
+                <div class="action-buttons" style="margin-top: 20px;">
+                    <button id="start-processing-btn" class="btn btn-primary" disabled>Start Processing</button>
+                </div>
+            </section>
+
+            <!-- Step 2: Process -->
+            <section id="process-section" class="section">
+                <h2>Step 2: Processing Video</h2>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-info">
+                        <p id="progress-text" class="progress-main-text">Initializing...</p>
+                        <div class="progress-details">
+                            <div class="progress-detail-item">
+                                <span class="detail-label">Stage:</span>
+                                <span id="progress-stage" class="detail-value">-</span>
+                            </div>
+                            <div class="progress-detail-item">
+                                <span class="detail-label">Progress:</span>
+                                <span id="progress-percentage" class="detail-value">0%</span>
+                            </div>
+                            <div class="progress-detail-item">
+                                <span class="detail-label">Frames:</span>
+                                <span id="progress-frames" class="detail-value">0 / 0</span>
+                            </div>
+                            <div class="progress-detail-item">
+                                <span class="detail-label">Scene Changes:</span>
+                                <span id="progress-scenes" class="detail-value">0</span>
+                            </div>
+                            <div class="progress-detail-item">
+                                <span class="detail-label">Elapsed Time:</span>
+                                <span id="progress-elapsed" class="detail-value">0s</span>
+                            </div>
+                            <div class="progress-detail-item">
+                                <span class="detail-label">Est. Remaining:</span>
+                                <span id="progress-remaining" class="detail-value">-</span>
+                            </div>
+                            <div class="progress-detail-item">
+                                <span class="detail-label">Speed:</span>
+                                <span id="progress-speed" class="detail-value">0 fps</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="process-status" class="status-message"></div>
+                <div class="action-buttons" style="margin-top: 20px;">
+                    <button id="stop-btn" class="btn btn-danger" style="display: none;">Stop Processing</button>
+                </div>
+            </section>
+
+            <!-- Step 3: Select Frames -->
+            <section id="frames-section" class="section">
+                <h2>Step 3: Select Frames</h2>
+                <div class="frames-controls">
+                    <button id="select-all-btn" class="btn btn-secondary">Select All</button>
+                    <button id="deselect-all-btn" class="btn btn-secondary">Deselect All</button>
+                    <span id="selected-count">0 frames selected</span>
+                </div>
+                <div id="frames-grid" class="frames-grid"></div>
+                <div class="action-buttons" style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+                    <button id="generate-btn" class="btn btn-primary" disabled>Generate PowerPoint</button>
+                    <button id="preview-html-btn" class="btn btn-secondary" disabled>Preview HTML</button>
+                    <button id="convert-pdf-btn" class="btn btn-secondary" disabled>Convert to PDF</button>
+                </div>
+            </section>
+
+            <!-- Step 4: Download -->
+            <section id="download-section" class="section">
+                <h2>Step 4: Download</h2>
+                <div class="download-content">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <p id="download-message">Your PowerPoint presentation is ready!</p>
+                    <p id="slide-count"></p>
+                    <div class="action-buttons" style="display: flex; gap: 15px; justify-content: center; margin-top: 20px;">
+                        <button id="view-btn" class="btn btn-primary">View in Browser</button>
+                        <button id="download-btn" class="btn btn-secondary">Download PPTX</button>
+                        <button id="download-pdf-btn" class="btn btn-secondary">Download PDF</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="image-modal" class="image-modal">
+        <span class="modal-close">&times;</span>
+        <img class="modal-image" id="modal-image" src="" alt="Full size frame">
+        <div class="modal-info" id="modal-info"></div>
+    </div>
+
+    <!-- Help Content (hidden, only used in popup) -->
+    <div style="display: none;">
+        <div class="setting-info" id="help-threshold">
+            <p class="setting-description">
+                <strong>What it does:</strong> Controls how much the video must change before creating a new slide. Think of it like adjusting how "different" two scenes need to be.
+            </p>
+            <ul class="setting-examples">
+                <li><strong>Lower values (0.1-0.3):</strong> More sensitive - captures subtle changes like camera movements, zooming, or small scene shifts. Great for detailed presentations or when you want many slides.</li>
+                <li><strong>Medium values (0.3-0.5):</strong> Balanced - detects clear scene changes like new locations, major camera angle changes, or significant content shifts. Good for most videos.</li>
+                <li><strong>Higher values (0.5-0.8):</strong> Less sensitive - only captures major changes like completely different scenes or locations. Use when you want fewer slides with only the most important moments.</li>
+            </ul>
+            <p class="setting-tip"><strong>💡 Tip:</strong> Start with the default (0.3). If you get too many slides, increase it. If you miss important moments, decrease it.</p>
+        </div>
+        <div class="setting-info" id="help-min-interval">
+            <p class="setting-description">
+                <strong>What it does:</strong> Sets the minimum time (in frames) that must pass between detected scene changes. This prevents creating too many slides from rapid changes or camera shakes.
+            </p>
+            <ul class="setting-examples">
+                <li><strong>Lower values (10-20):</strong> Allows slides to be created closer together. Use for videos with quick cuts, fast-paced content, or when you want to capture rapid changes.</li>
+                <li><strong>Medium values (30-50):</strong> Balanced spacing - prevents duplicate slides while still capturing important moments. Good for most videos (default: 30).</li>
+                <li><strong>Higher values (60-120):</strong> Creates more space between slides. Use for longer presentations, slower-paced videos, or when you want to avoid too many similar slides.</li>
+            </ul>
+            <p class="setting-tip"><strong>💡 Tip:</strong> At 30 frames per second, 30 frames = 1 second. Lower values mean slides can be closer together; higher values mean more time between slides.</p>
+        </div>
+    </div>
+
+    <!-- Help Popup -->
+    <div id="help-popup" class="help-popup">
+        <div class="help-popup-content">
+            <span class="help-popup-close">&times;</span>
+            <div id="help-popup-body"></div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
