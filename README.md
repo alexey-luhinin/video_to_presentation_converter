@@ -4,7 +4,7 @@ A web-based application that converts videos to PowerPoint presentations with au
 
 ## Features
 
-- Automatic scene change detection using histogram comparison
+- Automatic scene change detection using SSIM (Structural Similarity Index) algorithm
 - Web-based interface for easy video upload
 - Frame preview and selection before generating PPTX
 - Fast in-memory processing optimized for large files
@@ -42,4 +42,4 @@ All formats supported by OpenCV (MP4, AVI, MOV, etc.)
 - Backend: Flask
 - Video Processing: OpenCV
 - PPTX Generation: python-pptx
-- Scene Detection: Histogram comparison algorithm
+- Scene Detection: SSIM (Structural Similarity Index) algorithm for comparing frame similarity
