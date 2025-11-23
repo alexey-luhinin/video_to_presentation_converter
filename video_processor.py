@@ -146,7 +146,8 @@ class VideoProcessor:
                         'elapsed_time': time.time() - start_time,
                         'estimated_remaining': 0.0,
                         'processing_speed': 0.0,
-                        'error': 'Processing stopped by user'
+                        'stopped': True,
+                        'message': 'Processing stopped by user. You can continue processing to extract more frames.'
                     })
                 return frames
             
@@ -344,6 +345,191 @@ class VideoProcessor:
         if 0 <= index < len(self.frames):
             return self.frames[index]
         raise IndexError(f"Frame index {index} out of range")
+    
+    def remove_duplicate_frames(self, frames: List[Dict], similarity_threshold: float = 0.95, progress_callback: Optional[Callable] = None) -> List[Dict]:
+        """
+        Remove duplicate frames from extracted frames by comparing visual similarity.
+        
+        Args:
+            frames: List of frame dictionaries with image data
+            similarity_threshold: Threshold for considering frames as duplicates (0.0-1.0)
+                                 Higher values = more strict (0.95 = 95% similar = duplicate)
+            progress_callback: Optional callback function to report progress
+        
+        Returns:
+            List of unique frames (duplicates removed)
+        """
+        if not frames or len(frames) <= 1:
+            return frames
+        
+        if progress_callback:
+            progress_callback({
+                'stage': 'removing_duplicates',
+                'current_frame': 0,
+                'total_frames': len(frames),
+                'percentage': 0.0,
+                'frames_detected': len(frames),
+                'frames_after_dedup': 0
+            })
+        
+        print(f"Reviewing {len(frames)} frames for duplicates (similarity threshold: {similarity_threshold})...")
+        
+        unique_frames = [frames[0]]  # Always keep the first frame
+        total_frames = len(frames)
+        
+        # Extract features or prepare comparison data for all frames
+        # Use dictionary mapping for easier lookup
+        frame_features_dict = {}  # Maps frame index to features
+        frame_images_dict = {}    # Maps frame index to numpy array
+        
+        for idx, frame in enumerate(frames):
+            if 'image' not in frame:
+                continue
+            
+            frame_image = frame['image']
+            if not isinstance(frame_image, Image.Image):
+                continue
+            
+            # Convert PIL Image to numpy array for comparison
+            frame_array = np.array(frame_image)
+            frame_images_dict[idx] = frame_array
+            
+            # Extract features if ML is available, otherwise prepare for SSIM
+            if self.use_ml and self.feature_model is not None and TENSORFLOW_AVAILABLE:
+                try:
+                    # Resize and preprocess for feature extraction
+                    # PIL Image is already RGB, so convert to BGR for OpenCV if needed
+                    if len(frame_array.shape) == 3:
+                        frame_bgr = cv2.cvtColor(frame_array, cv2.COLOR_RGB2BGR)
+                    else:
+                        frame_bgr = frame_array
+                    frame_resized = cv2.resize(frame_bgr, (224, 224))
+                    frame_preprocessed = preprocess_input(frame_resized[np.newaxis, ...])
+                    
+                    # Extract features
+                    if self.feature_extract_fn is not None:
+                        features = self.feature_extract_fn(tf.constant(frame_preprocessed)).numpy()[0]
+                    else:
+                        features = self.feature_model(frame_preprocessed, training=False).numpy()[0]
+                    
+                    # Normalize features
+                    features_norm = features / (np.linalg.norm(features) + 1e-8)
+                    frame_features_dict[idx] = features_norm
+                except (NameError, Exception) as e:
+                    print(f"Warning: Could not extract ML features for frame {idx}: {e}")
+                    frame_features_dict[idx] = None
+            else:
+                frame_features_dict[idx] = None
+        
+        # Compare each frame with unique frames already selected
+        duplicates_removed = 0
+        
+        for idx in range(1, len(frames)):
+            if progress_callback and idx % 10 == 0:
+                progress_callback({
+                    'stage': 'removing_duplicates',
+                    'current_frame': idx,
+                    'total_frames': total_frames,
+                    'percentage': (idx / total_frames) * 100,
+                    'frames_detected': total_frames,
+                    'frames_after_dedup': len(unique_frames)
+                })
+            
+            current_frame = frames[idx]
+            if 'image' not in current_frame:
+                continue
+            
+            current_image = current_frame['image']
+            if not isinstance(current_image, Image.Image):
+                continue
+            
+            is_duplicate = False
+            
+            # Get features/image for current frame
+            current_features = frame_features_dict.get(idx)
+            current_array = frame_images_dict.get(idx)
+            
+            # Compare with all unique frames
+            for unique_frame_idx, unique_frame in enumerate(unique_frames):
+                # Get the index of the unique frame in the original frames list
+                # Find it by matching frame_number or by position
+                unique_list_idx = None
+                for i, f in enumerate(frames):
+                    if f == unique_frame:
+                        unique_list_idx = i
+                        break
+                
+                if unique_list_idx is None:
+                    continue
+                
+                # Get features/image for unique frame
+                unique_features = frame_features_dict.get(unique_list_idx)
+                unique_array = frame_images_dict.get(unique_list_idx)
+                
+                # Compare using ML features if available
+                if self.use_ml and current_features is not None and unique_features is not None:
+                    try:
+                        # Calculate cosine similarity
+                        cosine_sim = np.dot(current_features, unique_features)
+                        similarity = cosine_sim  # 1.0 = identical, 0.0 = completely different
+                        
+                        if similarity >= similarity_threshold:
+                            is_duplicate = True
+                            duplicates_removed += 1
+                            print(f"Duplicate detected: Frame {current_frame['frame_number']} (t={current_frame['timestamp']:.2f}s) is similar to Frame {unique_frame['frame_number']} (t={unique_frame['timestamp']:.2f}s) [similarity: {similarity:.3f}]")
+                            break
+                    except Exception as e:
+                        print(f"Warning: Error comparing frames {idx} and {unique_list_idx} with ML features: {e}")
+                        # Fall back to SSIM
+                        pass
+                
+                # Fallback to SSIM comparison
+                if not is_duplicate and current_array is not None and unique_array is not None:
+                    try:
+                        # Convert to grayscale for SSIM
+                        if len(current_array.shape) == 3:
+                            current_gray = cv2.cvtColor(current_array, cv2.COLOR_RGB2GRAY)
+                        else:
+                            current_gray = current_array
+                        
+                        if len(unique_array.shape) == 3:
+                            unique_gray = cv2.cvtColor(unique_array, cv2.COLOR_RGB2GRAY)
+                        else:
+                            unique_gray = unique_array
+                        
+                        # Resize for faster computation
+                        current_gray_small = cv2.resize(current_gray, (256, 256))
+                        unique_gray_small = cv2.resize(unique_gray, (256, 256))
+                        
+                        # Calculate SSIM
+                        ssim_score = ssim(unique_gray_small, current_gray_small, data_range=255)
+                        
+                        if ssim_score >= similarity_threshold:
+                            is_duplicate = True
+                            duplicates_removed += 1
+                            print(f"Duplicate detected: Frame {current_frame['frame_number']} (t={current_frame['timestamp']:.2f}s) is similar to Frame {unique_frame['frame_number']} (t={unique_frame['timestamp']:.2f}s) [SSIM: {ssim_score:.3f}]")
+                            break
+                    except Exception as e:
+                        print(f"Warning: Error comparing frames {idx} and {unique_list_idx} with SSIM: {e}")
+            
+            # Add frame if it's not a duplicate
+            if not is_duplicate:
+                unique_frames.append(current_frame)
+        
+        print(f"Removed {duplicates_removed} duplicate frames. Kept {len(unique_frames)} unique frames out of {total_frames} total frames.")
+        
+        if progress_callback:
+            progress_callback({
+                'stage': 'removing_duplicates',
+                'current_frame': total_frames,
+                'total_frames': total_frames,
+                'percentage': 100.0,
+                'frames_detected': total_frames,
+                'frames_after_dedup': len(unique_frames),
+                'duplicates_removed': duplicates_removed
+            })
+        
+        return unique_frames
     
     def clear(self):
         """Clear stored frames to free memory."""

@@ -34,6 +34,7 @@ const viewBtn = document.getElementById('view-btn');
 const downloadMessage = document.getElementById('download-message');
 const slideCount = document.getElementById('slide-count');
 const stopBtn = document.getElementById('stop-btn');
+const continueBtn = document.getElementById('continue-btn');
 const startProcessingBtn = document.getElementById('start-processing-btn');
 const navigationBar = document.getElementById('navigation-bar');
 const backBtn = document.getElementById('back-btn');
@@ -71,6 +72,11 @@ downloadBtn.addEventListener('click', downloadPPTX);
 downloadPdfBtn.addEventListener('click', downloadPDF);
 viewBtn.addEventListener('click', viewPresentation);
 stopBtn.addEventListener('click', stopProcessing);
+continueBtn.addEventListener('click', () => {
+    // Show info that processing will restart from beginning
+    showStatus(processStatus, 'Continuing processing... This will process the entire video file again.', 'info');
+    processVideo();
+});
 startProcessingBtn.addEventListener('click', processVideo);
 backBtn.addEventListener('click', goBack);
 homeBtn.addEventListener('click', goHome);
@@ -175,6 +181,7 @@ async function processVideo() {
     stopBtn.style.display = 'none';
     stopBtn.disabled = false;
     stopBtn.textContent = 'Stop Processing';
+    continueBtn.style.display = 'none'; // Hide continue button when starting new processing
     updateProgressDetails({
         stage: 'starting',
         current_frame: 0,
@@ -232,7 +239,41 @@ function startProgressPolling() {
             if (response.ok && data.progress) {
                 const progress = data.progress;
                 
-                // Update progress display
+                // Check if stopped first, before updating display (to avoid showing errors)
+                if (progress.stage === 'stopped') {
+                    clearInterval(progressPollInterval);
+                    progressPollInterval = null;
+                    stopBtn.style.display = 'none';
+                    continueBtn.style.display = 'block';
+                    startProcessingBtn.disabled = false; // Allow restarting processing
+                    
+                    // If frames were extracted before stopping, show them
+                    if (data.frames && data.frames.length > 0) {
+                        frames = data.frames;
+                        selectedFrames.clear();
+                        const message = progress.message || `Processing stopped. ${data.frame_count} frames extracted. You can continue processing to extract more frames.`;
+                        showStatus(processStatus, message, 'info');
+                        progressText.textContent = `Processing stopped - ${data.frame_count} frames found. Click "Continue Processing" to extract more.`;
+                        
+                        setTimeout(() => {
+                            showFrames();
+                        }, 500);
+                    } else {
+                        // Even if no frames extracted, show the frames section (will be empty)
+                        frames = [];
+                        selectedFrames.clear();
+                        const message = progress.message || 'Processing stopped by user. No frames extracted yet. Click "Continue Processing" to start extracting frames.';
+                        showStatus(processStatus, message, 'info');
+                        progressText.textContent = 'Processing stopped - no frames found. Click "Continue Processing" to start.';
+                        
+                        setTimeout(() => {
+                            showFrames();
+                        }, 500);
+                    }
+                    return; // Exit early to avoid processing other conditions
+                }
+                
+                // Update progress display (only if not stopped)
                 updateProgressDisplay(progress);
                 
                 // Check if completed
@@ -240,6 +281,7 @@ function startProgressPolling() {
                     clearInterval(progressPollInterval);
                     progressPollInterval = null;
                     stopBtn.style.display = 'none';
+                    continueBtn.style.display = 'none';
                     
                     if (data.frames) {
                         frames = data.frames;
@@ -252,36 +294,12 @@ function startProgressPolling() {
                             showFrames();
                         }, 500);
                     }
-                } else if (progress.stage === 'stopped') {
-                    clearInterval(progressPollInterval);
-                    progressPollInterval = null;
-                    stopBtn.style.display = 'none';
-                    
-                    // If frames were extracted before stopping, show them
-                    if (data.frames && data.frames.length > 0) {
-                        frames = data.frames;
-                        selectedFrames.clear();
-                        showStatus(processStatus, `Processing stopped. ${data.frame_count} frames extracted.`, 'info');
-                        progressText.textContent = `Processing stopped - ${data.frame_count} frames found`;
-                        
-                        setTimeout(() => {
-                            showFrames();
-                        }, 500);
-                    } else {
-                        // Even if no frames extracted, show the frames section (will be empty)
-                        frames = [];
-                        selectedFrames.clear();
-                        showStatus(processStatus, 'Processing stopped by user. No frames extracted yet.', 'info');
-                        progressText.textContent = 'Processing stopped - no frames found';
-                        
-                        setTimeout(() => {
-                            showFrames();
-                        }, 500);
-                    }
                 } else if (progress.error) {
+                    // Only show error if not stopped (stopped is handled above)
                     clearInterval(progressPollInterval);
                     progressPollInterval = null;
                     stopBtn.style.display = 'none';
+                    continueBtn.style.display = 'none'; // Don't show continue button on errors
                     showStatus(processStatus, `Error: ${progress.error}`, 'error');
                 }
             }

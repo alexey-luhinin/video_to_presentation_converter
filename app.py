@@ -119,6 +119,15 @@ def process_video_background(session_id, filepath, threshold, min_interval, fram
         # Extract frames with scene changes
         frames = processor.extract_frames_with_changes(filepath, progress_callback=update_progress, stop_check=should_stop)
         
+        # Remove duplicates from extracted frames (automatically select only unique frames)
+        if frames and len(frames) > 1:
+            original_count = len(frames)
+            print(f"Reviewing {original_count} extracted frames for duplicates...")
+            unique_frames = processor.remove_duplicate_frames(frames, similarity_threshold=0.95, progress_callback=update_progress)
+            frames = unique_frames
+            duplicates_removed = original_count - len(frames)
+            print(f"After duplicate removal: {len(frames)} unique frames (removed {duplicates_removed} duplicates)")
+        
         # Store in session - ensure frames are valid before storing
         if frames:
             # Validate frames have PIL Images
@@ -182,7 +191,12 @@ def process_video_background(session_id, filepath, threshold, min_interval, fram
                     if thumbnails:
                         session['thumbnails'] = thumbnails
                 sessions[session_id]['progress']['stage'] = 'stopped'
-                sessions[session_id]['progress']['error'] = 'Processing stopped by user'
+                sessions[session_id]['progress']['stopped'] = True
+                sessions[session_id]['progress']['message'] = 'Processing stopped by user. You can continue processing to extract more frames.'
+                # Explicitly clear error field so it's not treated as an error
+                if 'error' in sessions[session_id]['progress']:
+                    del sessions[session_id]['progress']['error']
+                sessions[session_id]['progress']['error'] = None
             return
         
         session['progress']['stage'] = 'generating_thumbnails'
